@@ -11,7 +11,7 @@ class KalshiInstrumentProvider(InstrumentProvider):
         self._http_client = http_client
 
     async def load_all_async(self, filters: dict | None=None) -> None:
-        raise NotImplementedError('KalshiInstrumentProvider.load_all_async — Phase 4')
+        raise NotImplementedError('KalshiInstrumentProvider.load_all_async')
 
     async def load_ids_async(self, instrument_ids, filters: dict | None=None) -> None:
-        raise NotImplementedError('KalshiInstrumentProvider.load_ids_async — Phase 4')
+        raise NotImplementedError('KalshiInstrumentProvider.load_ids_async')

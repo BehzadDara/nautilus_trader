@@ -10,7 +10,7 @@ class KalshiDataClient(LiveMarketDataClient):
         self._config = config
 
     async def _connect(self) -> None:
-        raise NotImplementedError('KalshiDataClient._connect — Phase 5/6')
+        raise NotImplementedError('KalshiDataClient._connect')
 
     async def _disconnect(self) -> None:
-        raise NotImplementedError('KalshiDataClient._disconnect — Phase 5/6')
+        raise NotImplementedError('KalshiDataClient._disconnect')

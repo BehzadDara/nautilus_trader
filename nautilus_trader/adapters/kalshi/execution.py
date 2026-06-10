@@ -10,7 +10,7 @@ class KalshiExecutionClient(LiveExecutionClient):
         self._config = config
 
     async def _connect(self) -> None:
-        raise NotImplementedError('KalshiExecutionClient._connect — Phase 7')
+        raise NotImplementedError('KalshiExecutionClient._connect')
 
     async def _disconnect(self) -> None:
-        raise NotImplementedError('KalshiExecutionClient._disconnect — Phase 7')
+        raise NotImplementedError('KalshiExecutionClient._disconnect')

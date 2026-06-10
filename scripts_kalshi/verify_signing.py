@@ -1,3 +1,11 @@
+import os
+import sys
+import tempfile
+
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != _REPO]
+os.chdir(tempfile.gettempdir())
+
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from nautilus_trader.adapters.kalshi.http.client import KalshiHttpClient
@@ -5,7 +13,7 @@ from nautilus_trader.adapters.kalshi.http.client import load_private_key
 from nautilus_trader.adapters.kalshi.http.client import sign_pss_text
 from nautilus_trader.common.component import LiveClock
 from nautilus_trader.core.nautilus_pyo3 import HttpMethod
-PEM = 'D:\\Projects\\Nautilustrader\\secrets\\kalshi_private_key.pem'
+PEM = os.path.join(_REPO, 'secrets', 'kalshi_private_key.pem')
 with open(PEM) as f:
     pem = f.read()
 client = KalshiHttpClient(api_key_id='test-key-id', private_key_pem=pem, clock=LiveClock())
@@ -22,4 +30,4 @@ key.public_key().verify(base64.b64decode(sig_b64), message.encode(), padding.PSS
 print('signed message:', message[:13], '...GET/trade-api/v2/markets')
 print('signature verified against public key OK')
 sign_pss_text(key, 'hello')
-print('\nPHASE 3 SIGNING OK (offline) - signature scheme valid, client constructs.')
+print('\nSIGNING OK (offline) - signature scheme valid, client constructs.')

@@ -10,4 +10,4 @@ class KalshiWebSocketClient:
         return self._base_url
 
     async def connect(self) -> None:
-        raise NotImplementedError('KalshiWebSocketClient.connect — Phase 5')
+        raise NotImplementedError('KalshiWebSocketClient.connect')
