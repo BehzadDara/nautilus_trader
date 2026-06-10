@@ -200,6 +200,7 @@ tests/test_data/**/backtest/**
 # RSA private keys and env files used for Kalshi API auth must NEVER be committed.
 .env
 .env.*
+!.env.example
 *.pem
 *_private_key*
 kalshi*.key

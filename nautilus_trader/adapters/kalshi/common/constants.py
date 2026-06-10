@@ -24,9 +24,12 @@ KALSHI: Final[str] = "KALSHI"
 KALSHI_VENUE: Final[Venue] = Venue(KALSHI)
 KALSHI_CLIENT_ID: Final[ClientId] = ClientId(KALSHI)
 
-# Base URLs (API base path prefix is ``/trade-api/v2``).
-KALSHI_BASE_URL_HTTP: Final[str] = "https://demo-api.kalshi.co"
-KALSHI_BASE_URL_WS: Final[str] = "wss://demo-api.kalshi.co/trade-api/ws/v2"
+# Default base URLs (API base path prefix is ``/trade-api/v2``). These are
+# fallbacks only — the effective URLs are resolved from the environment via
+# ``common/env.py`` (``KALSHI_BASE_URL_HTTP`` / ``KALSHI_BASE_URL_WS``), so they
+# can be changed per environment without editing code.
+KALSHI_DEFAULT_BASE_URL_HTTP: Final[str] = "https://demo-api.kalshi.co"
+KALSHI_DEFAULT_BASE_URL_WS: Final[str] = "wss://demo-api.kalshi.co/trade-api/ws/v2"
 
 # REST API base path appended to the base URL and included in the signed path.
 KALSHI_API_PATH: Final[str] = "/trade-api/v2"

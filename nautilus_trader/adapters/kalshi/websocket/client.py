@@ -20,7 +20,7 @@ subscribe to channels (``orderbook_delta`` / ``trade`` / ``ticker`` / ``fill`` /
 ``order`` / ``position``), heartbeat, and reconnect.
 """
 
-from nautilus_trader.adapters.kalshi.common.constants import KALSHI_BASE_URL_WS
+from nautilus_trader.adapters.kalshi.common.env import get_kalshi_base_url_ws
 
 
 class KalshiWebSocketClient:
@@ -31,7 +31,7 @@ class KalshiWebSocketClient:
     """
 
     def __init__(self, base_url: str | None = None) -> None:
-        self._base_url = base_url or KALSHI_BASE_URL_WS
+        self._base_url = base_url or get_kalshi_base_url_ws()
 
     @property
     def base_url(self) -> str:
