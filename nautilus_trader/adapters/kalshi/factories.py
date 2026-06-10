@@ -39,7 +39,6 @@ def get_kalshi_http_client(
     clock: LiveClock,
     api_key_id: str | None = None,
     private_key_pem: str | None = None,
-    is_demo: bool = True,
     base_url: str | None = None,
 ) -> KalshiHttpClient:
     """
@@ -49,7 +48,6 @@ def get_kalshi_http_client(
         api_key_id=api_key_id or get_kalshi_api_key_id(),
         private_key_pem=private_key_pem or get_kalshi_private_key_pem(),
         clock=clock,
-        is_demo=is_demo,
         base_url=base_url,
     )
 
@@ -86,7 +84,6 @@ class KalshiLiveDataClientFactory(LiveDataClientFactory):
             clock=clock,
             api_key_id=config.api_key_id,
             private_key_pem=config.private_key_pem,
-            is_demo=config.is_demo,
             base_url=config.base_url_http,
         )
         provider = get_kalshi_instrument_provider(
@@ -123,7 +120,6 @@ class KalshiLiveExecClientFactory(LiveExecClientFactory):
             clock=clock,
             api_key_id=config.api_key_id,
             private_key_pem=config.private_key_pem,
-            is_demo=config.is_demo,
             base_url=config.base_url_http,
         )
         provider = get_kalshi_instrument_provider(

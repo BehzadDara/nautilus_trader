@@ -13,12 +13,11 @@ PEM = r"D:\Projects\Nautilustrader\secrets\kalshi_private_key.pem"
 with open(PEM) as f:
     pem = f.read()
 
-# Construct the client with the real key (demo, no network call made).
+# Construct the client with the real key (no network call made).
 client = KalshiHttpClient(
     api_key_id="test-key-id",
     private_key_pem=pem,
     clock=LiveClock(),
-    is_demo=True,
 )
 print("client base_url:", client.base_url)
 

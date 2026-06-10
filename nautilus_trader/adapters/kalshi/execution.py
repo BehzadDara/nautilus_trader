@@ -17,7 +17,7 @@ Kalshi live execution client.
 
 Scaffold stub. Implemented in Phase 7 (order execution): submit/cancel/modify
 orders, report fills, and reconcile account/positions. HIGHEST RISK — always
-test on the Kalshi demo (sandbox) environment first.
+test against a non-production environment first.
 """
 
 from nautilus_trader.adapters.kalshi.config import KalshiExecClientConfig

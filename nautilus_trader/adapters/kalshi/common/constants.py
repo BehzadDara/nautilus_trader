@@ -25,10 +25,8 @@ KALSHI_VENUE: Final[Venue] = Venue(KALSHI)
 KALSHI_CLIENT_ID: Final[ClientId] = ClientId(KALSHI)
 
 # Base URLs (API base path prefix is ``/trade-api/v2``).
-KALSHI_BASE_URL_HTTP: Final[str] = "https://api.elections.kalshi.com"
-KALSHI_BASE_URL_DEMO_HTTP: Final[str] = "https://demo-api.kalshi.co"
-KALSHI_BASE_URL_WS: Final[str] = "wss://api.elections.kalshi.com/trade-api/ws/v2"
-KALSHI_BASE_URL_DEMO_WS: Final[str] = "wss://demo-api.kalshi.co/trade-api/ws/v2"
+KALSHI_BASE_URL_HTTP: Final[str] = "https://demo-api.kalshi.co"
+KALSHI_BASE_URL_WS: Final[str] = "wss://demo-api.kalshi.co/trade-api/ws/v2"
 
 # REST API base path appended to the base URL and included in the signed path.
 KALSHI_API_PATH: Final[str] = "/trade-api/v2"

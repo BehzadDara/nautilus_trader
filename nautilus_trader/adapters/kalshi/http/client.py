@@ -38,7 +38,6 @@ from nautilus_trader.adapters.kalshi.common.constants import KALSHI_ACCESS_KEY_H
 from nautilus_trader.adapters.kalshi.common.constants import KALSHI_ACCESS_SIGNATURE_HEADER
 from nautilus_trader.adapters.kalshi.common.constants import KALSHI_ACCESS_TIMESTAMP_HEADER
 from nautilus_trader.adapters.kalshi.common.constants import KALSHI_API_PATH
-from nautilus_trader.adapters.kalshi.common.constants import KALSHI_BASE_URL_DEMO_HTTP
 from nautilus_trader.adapters.kalshi.common.constants import KALSHI_BASE_URL_HTTP
 from nautilus_trader.adapters.kalshi.common.constants import KALSHI_HTTP_RATE_LIMIT
 from nautilus_trader.adapters.kalshi.http.errors import KalshiHttpError
@@ -99,8 +98,6 @@ class KalshiHttpClient:
         The RSA private key (PEM) used to sign requests.
     clock : object
         A clock exposing ``timestamp_ms()`` (the Nautilus ``LiveClock``).
-    is_demo : bool, default True
-        If the demo (sandbox) environment should be used.
     base_url : str, optional
         An explicit base URL override.
     proxy_url : str, optional
@@ -113,16 +110,13 @@ class KalshiHttpClient:
         api_key_id: str,
         private_key_pem: str,
         clock: Any,
-        is_demo: bool = True,
         base_url: str | None = None,
         proxy_url: str | None = None,
     ) -> None:
         self._api_key_id = api_key_id
         self._private_key = load_private_key(private_key_pem)
         self._clock = clock
-        self._base_url = base_url or (
-            KALSHI_BASE_URL_DEMO_HTTP if is_demo else KALSHI_BASE_URL_HTTP
-        )
+        self._base_url = base_url or KALSHI_BASE_URL_HTTP
         self._log = Logger(name=type(self).__name__)
 
         self._client = HttpClient(

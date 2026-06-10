@@ -39,8 +39,6 @@ class KalshiDataClientConfig(LiveDataClientConfig, frozen=True):
         The RSA private key contents (PEM) used to sign requests.
         If ``None`` then sourced from ``KALSHI_PRIVATE_KEY_PEM`` or read from
         the file at ``KALSHI_PRIVATE_KEY_PATH``.
-    is_demo : bool, default True
-        If True, use the Kalshi demo (sandbox) environment. Defaults to demo for safety.
     base_url_http : str, optional
         The HTTP client custom endpoint override.
     base_url_ws : str, optional
@@ -56,7 +54,6 @@ class KalshiDataClientConfig(LiveDataClientConfig, frozen=True):
     venue: Venue = KALSHI_VENUE
     api_key_id: str | None = None
     private_key_pem: str | None = None
-    is_demo: bool = True
     base_url_http: str | None = None
     base_url_ws: str | None = None
     ws_connection_delay_secs: PositiveFloat = 0.1
@@ -80,8 +77,6 @@ class KalshiExecClientConfig(LiveExecClientConfig, frozen=True):
         The RSA private key contents (PEM) used to sign requests.
         If ``None`` then sourced from ``KALSHI_PRIVATE_KEY_PEM`` or read from
         the file at ``KALSHI_PRIVATE_KEY_PATH``.
-    is_demo : bool, default True
-        If True, use the Kalshi demo (sandbox) environment. Defaults to demo for safety.
     base_url_http : str, optional
         The HTTP client custom endpoint override.
     base_url_ws : str, optional
@@ -99,7 +94,6 @@ class KalshiExecClientConfig(LiveExecClientConfig, frozen=True):
     venue: Venue = KALSHI_VENUE
     api_key_id: str | None = None
     private_key_pem: str | None = None
-    is_demo: bool = True
     base_url_http: str | None = None
     base_url_ws: str | None = None
     max_retries: PositiveInt | None = None

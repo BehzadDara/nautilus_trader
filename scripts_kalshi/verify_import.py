@@ -34,16 +34,15 @@ from nautilus_trader.adapters.kalshi import (
     KalshiLiveExecClientFactory,
 )
 from nautilus_trader.adapters.kalshi.common.constants import (
-    KALSHI_BASE_URL_DEMO_HTTP,
-    KALSHI_BASE_URL_DEMO_WS,
+    KALSHI_BASE_URL_HTTP,
+    KALSHI_BASE_URL_WS,
     KALSHI_API_PATH,
 )
 
 print()
 print("venue:", KALSHI_VENUE)
-print("demo http:", KALSHI_BASE_URL_DEMO_HTTP)
-print("demo ws:", KALSHI_BASE_URL_DEMO_WS)
+print("http:", KALSHI_BASE_URL_HTTP)
+print("ws:", KALSHI_BASE_URL_WS)
 print("api path:", KALSHI_API_PATH)
-print("data config defaults is_demo:", KalshiDataClientConfig().is_demo)
 
 print("\nPHASE 2 SCAFFOLD OK — all modules import, public surface present.")

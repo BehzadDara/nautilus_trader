@@ -1,15 +1,15 @@
 r"""
-Phase 3 live check: hit Kalshi DEMO with a signed request and confirm success.
+Phase 3 live check: hit the Kalshi API with a signed request and confirm success.
 
 Run from a directory OUTSIDE the repo source tree using the venv Python, e.g.:
 
-    $env:KALSHI_API_KEY_ID = "c0ee1ace-aa9e-4c36-94a8-3e100c5dbbc5"
+    $env:KALSHI_API_KEY_ID = "<your-api-key-id>"
     $env:KALSHI_PRIVATE_KEY_PATH = "D:\Projects\Nautilustrader\secrets\kalshi_private_key.pem"
     cd $env:TEMP
     & D:\Projects\Nautilustrader\.venv\Scripts\python.exe `
         D:\Projects\Nautilustrader\scripts_kalshi\live_signed_get.py
 
-It performs two requests against the demo environment:
+It performs two requests against the configured base URL:
   1. GET /markets        - lists markets (proves connectivity + parsing)
   2. GET /portfolio/balance - requires a valid signature (proves auth/signing)
 """
@@ -27,7 +27,6 @@ async def main() -> None:
         api_key_id=get_kalshi_api_key_id(),
         private_key_pem=get_kalshi_private_key_pem(),
         clock=LiveClock(),
-        is_demo=True,  # DEMO only
     )
     print("base_url:", client.base_url)
 
@@ -40,7 +39,7 @@ async def main() -> None:
     balance = await client.get("/portfolio/balance")
     print("    OK - balance response:", balance)
 
-    print("\nPHASE 3 LIVE OK - signed requests to Kalshi demo succeeded (HTTP 200).")
+    print("\nPHASE 3 LIVE OK - signed requests to the Kalshi API succeeded (HTTP 200).")
 
 
 if __name__ == "__main__":
