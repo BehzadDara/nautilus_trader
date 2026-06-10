@@ -35,19 +35,20 @@ from nautilus_trader.live.factories import LiveDataClientFactory
 from nautilus_trader.live.factories import LiveExecClientFactory
 
 
-@lru_cache(maxsize=1)
 def get_kalshi_http_client(
+    clock: LiveClock,
     api_key_id: str | None = None,
     private_key_pem: str | None = None,
     is_demo: bool = True,
     base_url: str | None = None,
 ) -> KalshiHttpClient:
     """
-    Cache and return a Kalshi HTTP client with the given credentials.
+    Return a Kalshi HTTP client with the given credentials.
     """
     return KalshiHttpClient(
         api_key_id=api_key_id or get_kalshi_api_key_id(),
         private_key_pem=private_key_pem or get_kalshi_private_key_pem(),
+        clock=clock,
         is_demo=is_demo,
         base_url=base_url,
     )
@@ -82,6 +83,7 @@ class KalshiLiveDataClientFactory(LiveDataClientFactory):
         clock: LiveClock,
     ) -> KalshiDataClient:
         http_client = get_kalshi_http_client(
+            clock=clock,
             api_key_id=config.api_key_id,
             private_key_pem=config.private_key_pem,
             is_demo=config.is_demo,
@@ -118,6 +120,7 @@ class KalshiLiveExecClientFactory(LiveExecClientFactory):
         clock: LiveClock,
     ) -> KalshiExecutionClient:
         http_client = get_kalshi_http_client(
+            clock=clock,
             api_key_id=config.api_key_id,
             private_key_pem=config.private_key_pem,
             is_demo=config.is_demo,
