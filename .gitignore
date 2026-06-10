@@ -195,3 +195,13 @@ tests/test_data/**/backtest/**
 !tests/test_data/nautilus/*/**.parquet
 !tests/integration_tests/adapters/betfair/responses/*.log
 !/nautilus_core/adapters/src/databento/test_data/*
+
+# --- Kalshi adapter (internal) credential guards ---
+# RSA private keys and env files used for Kalshi API auth must NEVER be committed.
+.env
+.env.*
+*.pem
+*_private_key*
+kalshi*.key
+kalshi*secret*
+secrets/
