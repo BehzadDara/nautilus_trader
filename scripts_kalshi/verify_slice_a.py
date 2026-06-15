@@ -24,9 +24,16 @@ from nautilus_trader.model.instruments import BinaryOption
 from nautilus_trader.test_kit.stubs.component import TestComponentStubs
 
 RUN_SECS = int(os.environ.get("VERIFY_SECS", "20"))
+DEFAULT_TICKER = "KXMENWORLDCUP-26-FR"
 
 def pick_busiest(markets):
     return sorted(markets, key=lambda m: float(m.get("volume_24h_fp") or 0), reverse=True)
+
+async def _market_exists(http, ticker):
+    try:
+        return bool((await http.get(f"/markets/{ticker}")).get("market"))
+    except Exception:
+        return False
 
 async def main() -> None:
     clock = LiveClock()
@@ -39,7 +46,9 @@ async def main() -> None:
     provider = KalshiInstrumentProvider(http_client=http, clock=clock, config=KalshiInstrumentProviderConfig(load_status="open"))
     page = await http.get("/markets", params={"limit": 500, "status": "open"})
     busiest = pick_busiest(page["markets"])
-    target = os.environ.get("VERIFY_TICKER") or busiest[0]["ticker"]
+    target = os.environ.get("VERIFY_TICKER") or DEFAULT_TICKER
+    if not await _market_exists(http, target):
+        target = busiest[0]["ticker"]
     await provider.load_async(get_kalshi_instrument_id(target))
     instrument = provider.find(get_kalshi_instrument_id(target))
     assert isinstance(instrument, BinaryOption)
