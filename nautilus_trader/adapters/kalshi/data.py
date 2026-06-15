@@ -34,7 +34,7 @@ from nautilus_trader.model.instruments import BinaryOption
 class KalshiDataClient(LiveMarketDataClient):
 
     def __init__(self, loop: asyncio.AbstractEventLoop, client: Any, msgbus: Any, cache: Any, clock: Any, instrument_provider: KalshiInstrumentProvider, config: KalshiDataClientConfig, name: str | None=None) -> None:
-        super().__init__(loop=loop, client_id=ClientId(name or KALSHI_VENUE.value), venue=config.venue, msgbus=msgbus, cache=cache, clock=clock, instrument_provider=instrument_provider, config=config, name=name)
+        super().__init__(loop=loop, client_id=ClientId(name or KALSHI_VENUE.value), venue=config.venue, msgbus=msgbus, cache=cache, clock=clock, instrument_provider=instrument_provider, config=config)
         self._config = config
         self._http_client = client
         self._ws_client = KalshiWebSocketClient(clock=clock, api_key_id=config.api_key_id, private_key_pem=config.private_key_pem, handler=self._handle_raw_ws_message, loop=loop, base_url=config.base_url_ws, handler_reconnect=None)
