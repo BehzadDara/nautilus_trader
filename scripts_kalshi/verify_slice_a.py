@@ -43,7 +43,10 @@ async def main() -> None:
     await provider.load_async(get_kalshi_instrument_id(target))
     instrument = provider.find(get_kalshi_instrument_id(target))
     assert isinstance(instrument, BinaryOption)
-    print(f"    OK - {instrument.id} | outcome={instrument.outcome} | tick={instrument.price_increment} | expiry_ns={instrument.expiration_ns}")
+    print(f"    OK - {instrument.id}")
+    print(f"    question : {instrument.description}")
+    print(f"    yes means: {instrument.outcome}")
+    print(f"    tick={instrument.price_increment} | expiry_ns={instrument.expiration_ns}")
 
     cache = TestComponentStubs.cache()
     msgbus = TestComponentStubs.msgbus()
