@@ -45,7 +45,6 @@ async def main() -> None:
     assert isinstance(instrument, BinaryOption)
     print(f"    OK - {instrument.id}")
     print(f"    question : {instrument.description}")
-    print(f"    yes means: {instrument.outcome}")
     print(f"    tick={instrument.price_increment} | expiry_ns={instrument.expiration_ns}")
 
     cache = TestComponentStubs.cache()
