@@ -71,6 +71,18 @@ async def main() -> None:
 
     client._handle_data = capture
 
+    raw_count = {"n": 0}
+    original_raw = client._handle_raw_ws_message
+
+    def raw_tap(raw: bytes) -> None:
+        raw_count["n"] += 1
+        if os.environ.get("VERIFY_RAW") and raw_count["n"] <= 4:
+            print(f"    [RAW] {raw.decode(errors='replace')[:200]}")
+        return original_raw(raw)
+
+    client._handle_raw_ws_message = raw_tap
+    client._ws_client._handler = raw_tap
+
     client._add_subscription_order_book_deltas(instrument.id)
     client._add_subscription_quote_ticks(instrument.id)
     client._add_subscription_trade_ticks(instrument.id)
@@ -86,15 +98,21 @@ async def main() -> None:
     await client._ws_client.disconnect()
 
     book = client._local_books.get(instrument.id)
+    best_bid = book.best_bid_price() if book is not None else None
+    best_ask = book.best_ask_price() if book is not None else None
     print("\n[3] Results")
+    print(f"    raw messages  : {raw_count['n']}")
     print(f"    book messages : {captured['book']}")
     print(f"    quote ticks   : {captured['quote']}")
     print(f"    trade ticks   : {captured['trade']}")
-    if book is not None:
-        print(f"    final best_bid: {book.best_bid_price()}   best_ask: {book.best_ask_price()}")
+    print(f"    final best_bid: {best_bid}   best_ask: {best_ask}")
+    if raw_count["n"] == 0:
+        print("    note: no websocket traffic this run (demo can be slow/flaky); raise VERIFY_SECS and retry")
+    elif best_bid is None and best_ask is None:
+        print("    note: this market's book is empty/one-sided; try VERIFY_TICKER on a busier market")
 
-    ok = captured["book"] >= 1 and book is not None and book.best_bid_price() is not None
-    print("\nSLICE A OK" if ok else "\nSLICE A CHECK FAILED - no book/quote received")
+    ok = captured["book"] >= 1 and (best_bid is not None or best_ask is not None)
+    print("\nSLICE A OK - instrument loaded, WS connected, book parsed and applied" if ok else "\nSLICE A CHECK FAILED - no book levels parsed (no data received from venue)")
 
 if __name__ == "__main__":
     asyncio.run(main())
