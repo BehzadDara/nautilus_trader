@@ -61,9 +61,7 @@ async def main() -> None:
     if placed:
         print("\nSLICE B OK - order placed and acknowledged on demo")
     else:
-        print("\nSLICE B PARTIAL - read-only paths OK, but the order was not accepted")
-        print("  most likely cause: the demo account has no funds (balance_dollars=0.0000 above)")
-        print("  add demo funds at https://demo.kalshi.co, then re-run")
+        print("\nSLICE B PARTIAL - read-only paths OK, but the order was not accepted (see the rejection reason above)")
 
 async def _place_order(client, cache, clock) -> bool:
     from nautilus_trader.adapters.kalshi.common.symbol import get_kalshi_instrument_id
@@ -78,14 +76,20 @@ async def _place_order(client, cache, clock) -> bool:
     instrument = client._instrument_provider.find(get_kalshi_instrument_id(ticker))
     cache.add_instrument(instrument)
 
-    reject = {"reason": None}
-    original_reject = client.generate_order_rejected
+    captured = {"order_id": None, "error": None}
+    original_post = client._http_client.post
 
-    def reject_tap(strategy_id, instrument_id, client_order_id, reason, ts_event, **kwargs):
-        reject["reason"] = reason
-        return original_reject(strategy_id, instrument_id, client_order_id, reason, ts_event, **kwargs)
+    async def post_tap(endpoint, payload=None):
+        try:
+            resp = await original_post(endpoint, payload=payload)
+            if isinstance(resp, dict) and resp.get("order_id"):
+                captured["order_id"] = resp["order_id"]
+            return resp
+        except Exception as e:
+            captured["error"] = str(e)
+            raise
 
-    client.generate_order_rejected = reject_tap
+    client._http_client.post = post_tap
 
     if side == "yes":
         order_side = OrderSide.BUY
@@ -100,13 +104,12 @@ async def _place_order(client, cache, clock) -> bool:
     cache.add_order(order, None)
     await client._submit_order(TestCommandStubs.submit_order_command(order))
     await asyncio.sleep(1)
-    venue_order_id = order.venue_order_id.value if order.venue_order_id else None
-    print(f"    venue_order_id={venue_order_id} status={order.status_string()}")
 
-    if reject["reason"]:
-        print(f"    REJECTED by venue: {reject['reason']}")
-
-    return venue_order_id is not None
+    if captured["order_id"]:
+        print(f"    ACCEPTED - venue_order_id={captured['order_id']}")
+        return True
+    print(f"    REJECTED by venue: {captured['error']}")
+    return False
 
 async def _safe(coro_fn):
     try:
