@@ -3,10 +3,9 @@ import asyncio
 from decimal import Decimal
 from typing import Any
 from nautilus_trader.adapters.kalshi.common.constants import KALSHI_VENUE
-from nautilus_trader.adapters.kalshi.common.enums import kalshi_action_from_order_side
-from nautilus_trader.adapters.kalshi.common.enums import kalshi_order_type
+from nautilus_trader.adapters.kalshi.common.enums import kalshi_side_from_order_side
 from nautilus_trader.adapters.kalshi.common.enums import kalshi_time_in_force
-from nautilus_trader.adapters.kalshi.common.enums import order_side_from_kalshi_action
+from nautilus_trader.adapters.kalshi.common.enums import order_side_from_kalshi_side
 from nautilus_trader.adapters.kalshi.common.enums import order_status_from_kalshi
 from nautilus_trader.adapters.kalshi.common.symbol import get_kalshi_instrument_id
 from nautilus_trader.adapters.kalshi.common.symbol import get_kalshi_ticker
@@ -65,9 +64,6 @@ class KalshiExecutionClient(LiveExecutionClient):
         balance = AccountBalance(total=Money(total, USD), locked=Money(Decimal(0), USD), free=Money(total, USD))
         self.generate_account_state(balances=[balance], margins=[], reported=True, ts_event=self._clock.timestamp_ns())
 
-    def _price_to_cents(self, instrument: Any, price: Price) -> int:
-        return int(round(float(price) * 100))
-
     async def _submit_order(self, command: SubmitOrder) -> None:
         order: Order = command.order
         instrument = self._cache.instrument(command.instrument_id)
@@ -78,19 +74,15 @@ class KalshiExecutionClient(LiveExecutionClient):
             self.generate_order_rejected(command.strategy_id, command.instrument_id, order.client_order_id, f'unsupported order type {order.order_type}', self._clock.timestamp_ns())
             return
         self.generate_order_submitted(command.strategy_id, command.instrument_id, order.client_order_id, self._clock.timestamp_ns())
-        payload: dict[str, Any] = {'ticker': get_kalshi_ticker(command.instrument_id), 'action': kalshi_action_from_order_side(order.side).value, 'side': 'yes', 'count': int(order.quantity.as_double()), 'type': kalshi_order_type(order.order_type), 'client_order_id': order.client_order_id.value}
+        payload: dict[str, Any] = {'ticker': get_kalshi_ticker(command.instrument_id), 'side': kalshi_side_from_order_side(order.side).value, 'count': f'{order.quantity.as_double():.2f}', 'time_in_force': kalshi_time_in_force(order.time_in_force), 'self_trade_prevention_type': 'taker_at_cross', 'client_order_id': order.client_order_id.value}
         if order.order_type == OrderType.LIMIT:
-            payload['yes_price'] = self._price_to_cents(instrument, order.price)
-        tif = kalshi_time_in_force(order.time_in_force)
-        if tif is not None:
-            payload['time_in_force'] = tif
+            payload['price'] = f'{float(order.price):.4f}'
         try:
-            response = await self._http_client.post('/portfolio/orders', payload=payload)
+            response = await self._http_client.post('/portfolio/events/orders', payload=payload)
         except KalshiHttpError as e:
             self.generate_order_rejected(command.strategy_id, command.instrument_id, order.client_order_id, str(e), self._clock.timestamp_ns())
             return
-        venue_order = response.get('order') or {}
-        venue_order_id = venue_order.get('order_id')
+        venue_order_id = response.get('order_id') if response else None
         if venue_order_id:
             self.generate_order_accepted(command.strategy_id, command.instrument_id, order.client_order_id, VenueOrderId(str(venue_order_id)), self._clock.timestamp_ns())
 
@@ -142,25 +134,38 @@ class KalshiExecutionClient(LiveExecutionClient):
                 reports.append(report)
         return reports
 
+    def _order_price(self, order: dict[str, Any]) -> Price | None:
+        if order.get('price') is not None:
+            return Price(float(order['price']), 2)
+        if order.get('yes_price') is not None:
+            return Price(float(order['yes_price']) / 100.0, 2)
+        return None
+
+    def _order_side(self, order: dict[str, Any]) -> OrderSide:
+        side = order.get('side')
+        if side in ('bid', 'ask'):
+            return order_side_from_kalshi_side(side)
+        return OrderSide.SELL if order.get('action') == 'sell' else OrderSide.BUY
+
     def _parse_order_report(self, order: dict[str, Any]) -> OrderStatusReport | None:
         ticker = order.get('ticker')
         if not ticker:
             return None
         instrument_id = get_kalshi_instrument_id(ticker)
-        price_cents = order.get('yes_price')
-        count = order.get('initial_count') or order.get('count') or 0
-        filled = count - (order.get('remaining_count') or 0)
+        price = self._order_price(order)
+        count = int(float(order.get('initial_count') or order.get('count') or 0))
+        filled = count - int(float(order.get('remaining_count') or 0))
         now = self._clock.timestamp_ns()
-        return OrderStatusReport(account_id=self._account_id, instrument_id=instrument_id, venue_order_id=VenueOrderId(str(order['order_id'])), order_side=order_side_from_kalshi_action(order.get('action', 'buy')), order_type=OrderType.LIMIT if price_cents is not None else OrderType.MARKET, time_in_force=TimeInForce.GTC, order_status=order_status_from_kalshi(order.get('status', 'resting')), quantity=Quantity.from_int(int(count)), filled_qty=Quantity.from_int(int(filled)), report_id=UUID4(), ts_accepted=now, ts_last=now, ts_init=now, client_order_id=ClientOrderId(order['client_order_id']) if order.get('client_order_id') else None, price=Price(float(price_cents) / 100.0, 2) if price_cents is not None else None)
+        return OrderStatusReport(account_id=self._account_id, instrument_id=instrument_id, venue_order_id=VenueOrderId(str(order['order_id'])), order_side=self._order_side(order), order_type=OrderType.LIMIT if price is not None else OrderType.MARKET, time_in_force=TimeInForce.GTC, order_status=order_status_from_kalshi(order.get('status', 'resting')), quantity=Quantity.from_int(count), filled_qty=Quantity.from_int(filled), report_id=UUID4(), ts_accepted=now, ts_last=now, ts_init=now, client_order_id=ClientOrderId(order['client_order_id']) if order.get('client_order_id') else None, price=price)
 
     def _parse_fill_report(self, fill: dict[str, Any]) -> FillReport | None:
         ticker = fill.get('ticker')
         if not ticker:
             return None
         instrument_id = get_kalshi_instrument_id(ticker)
-        price_cents = fill.get('yes_price') if fill.get('yes_price') is not None else fill.get('price')
+        last_px = self._order_price(fill) or Price(0.0, 2)
         now = self._clock.timestamp_ns()
-        return FillReport(account_id=self._account_id, instrument_id=instrument_id, venue_order_id=VenueOrderId(str(fill['order_id'])), trade_id=TradeId(str(fill.get('trade_id') or fill.get('fill_id'))), order_side=order_side_from_kalshi_action(fill.get('action', 'buy')), last_qty=Quantity.from_int(int(fill.get('count') or 0)), last_px=Price(float(price_cents) / 100.0, 2), commission=Money(Decimal(0), USD), liquidity_side=LiquiditySide.TAKER if fill.get('is_taker') else LiquiditySide.MAKER, report_id=UUID4(), ts_event=now, ts_init=now)
+        return FillReport(account_id=self._account_id, instrument_id=instrument_id, venue_order_id=VenueOrderId(str(fill['order_id'])), trade_id=TradeId(str(fill.get('trade_id') or fill.get('fill_id'))), order_side=self._order_side(fill), last_qty=Quantity.from_int(int(float(fill.get('count') or 0))), last_px=last_px, commission=Money(Decimal(0), USD), liquidity_side=LiquiditySide.TAKER if fill.get('is_taker') else LiquiditySide.MAKER, report_id=UUID4(), ts_event=now, ts_init=now)
 
     def _parse_position_report(self, position: dict[str, Any]) -> PositionStatusReport | None:
         ticker = position.get('ticker')

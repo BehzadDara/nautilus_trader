@@ -51,8 +51,8 @@ async def main() -> None:
     print(f"    positions: {len(positions)}")
 
     print("[5] Order side -> Kalshi mapping ...")
-    from nautilus_trader.adapters.kalshi.common.enums import kalshi_action_from_order_side, kalshi_time_in_force, kalshi_order_type
-    print(f"    BUY -> {kalshi_action_from_order_side(OrderSide.BUY).value} ; SELL -> {kalshi_action_from_order_side(OrderSide.SELL).value}")
+    from nautilus_trader.adapters.kalshi.common.enums import kalshi_side_from_order_side, kalshi_time_in_force, kalshi_order_type
+    print(f"    BUY -> {kalshi_side_from_order_side(OrderSide.BUY).value} ; SELL -> {kalshi_side_from_order_side(OrderSide.SELL).value}")
     print(f"    LIMIT -> {kalshi_order_type(OrderType.LIMIT)} ; MARKET -> {kalshi_order_type(OrderType.MARKET)}")
     print(f"    GTC -> {kalshi_time_in_force(TimeInForce.GTC)} ; IOC -> {kalshi_time_in_force(TimeInForce.IOC)} ; FOK -> {kalshi_time_in_force(TimeInForce.FOK)}")
 
@@ -70,7 +70,6 @@ async def _place_order(client, cache, clock) -> bool:
     from nautilus_trader.test_kit.stubs.component import TestComponentStubs
     from nautilus_trader.test_kit.stubs.commands import TestCommandStubs
     from nautilus_trader.model.objects import Price, Quantity
-    import uuid
 
     ticker = os.environ.get("VERIFY_TICKER", "KXMENWORLDCUP-26-FR")
     side = os.environ.get("VERIFY_SIDE", "yes").lower()
@@ -88,24 +87,21 @@ async def _place_order(client, cache, clock) -> bool:
 
     client.generate_order_rejected = reject_tap
 
-    print(f"\n[6] Placing a 1-contract BUY {side.upper()} limit @ {cents}c on {ticker} ...")
     if side == "yes":
-        factory = TestComponentStubs.order_factory()
-        order = factory.limit(instrument_id=instrument.id, order_side=OrderSide.BUY, quantity=Quantity.from_int(1), price=Price(cents / 100.0, 2), time_in_force=TimeInForce.GTC)
-        cache.add_order(order, None)
-        await client._submit_order(TestCommandStubs.submit_order_command(order))
-        await asyncio.sleep(1)
-        venue_order_id = order.venue_order_id.value if order.venue_order_id else None
-        print(f"    venue_order_id={venue_order_id} status={order.status_string()}")
+        order_side = OrderSide.BUY
+        yes_price = cents / 100.0
     else:
-        try:
-            payload = {"ticker": ticker, "action": "buy", "side": "no", "count": 1, "type": "limit", "no_price": cents, "client_order_id": str(uuid.uuid4())}
-            response = await client._http_client.post("/portfolio/orders", payload=payload)
-            venue_order_id = (response.get("order") or {}).get("order_id")
-            print(f"    venue_order_id={venue_order_id} status={(response.get('order') or {}).get('status')}")
-        except Exception as e:
-            venue_order_id = None
-            reject["reason"] = str(e)
+        order_side = OrderSide.SELL
+        yes_price = 1.0 - cents / 100.0
+
+    print(f"\n[6] Placing 1 contract {side.upper()} @ {cents}c (YES leg {order_side.name} @ {yes_price:.2f}) on {ticker} ...")
+    factory = TestComponentStubs.order_factory()
+    order = factory.limit(instrument_id=instrument.id, order_side=order_side, quantity=Quantity.from_int(1), price=Price(yes_price, 2), time_in_force=TimeInForce.GTC)
+    cache.add_order(order, None)
+    await client._submit_order(TestCommandStubs.submit_order_command(order))
+    await asyncio.sleep(1)
+    venue_order_id = order.venue_order_id.value if order.venue_order_id else None
+    print(f"    venue_order_id={venue_order_id} status={order.status_string()}")
 
     if reject["reason"]:
         print(f"    REJECTED by venue: {reject['reason']}")

@@ -5,12 +5,8 @@ from nautilus_trader.model.enums import OrderType
 from nautilus_trader.model.enums import TimeInForce
 
 class KalshiOrderSide(Enum):
-    YES = 'yes'
-    NO = 'no'
-
-class KalshiOrderAction(Enum):
-    BUY = 'buy'
-    SELL = 'sell'
+    BID = 'bid'
+    ASK = 'ask'
 
 class KalshiOrderStatus(Enum):
     RESTING = 'resting'
@@ -18,19 +14,19 @@ class KalshiOrderStatus(Enum):
     EXECUTED = 'executed'
     PENDING = 'pending'
 
-def kalshi_action_from_order_side(order_side: OrderSide) -> KalshiOrderAction:
+def kalshi_side_from_order_side(order_side: OrderSide) -> KalshiOrderSide:
     if order_side == OrderSide.BUY:
-        return KalshiOrderAction.BUY
+        return KalshiOrderSide.BID
     if order_side == OrderSide.SELL:
-        return KalshiOrderAction.SELL
+        return KalshiOrderSide.ASK
     raise ValueError(f'invalid order side: {order_side}')
 
-def order_side_from_kalshi_action(action: str) -> OrderSide:
-    if action == KalshiOrderAction.BUY.value:
+def order_side_from_kalshi_side(side: str) -> OrderSide:
+    if side == KalshiOrderSide.BID.value:
         return OrderSide.BUY
-    if action == KalshiOrderAction.SELL.value:
+    if side == KalshiOrderSide.ASK.value:
         return OrderSide.SELL
-    raise ValueError(f'invalid kalshi action: {action}')
+    raise ValueError(f'invalid kalshi side: {side}')
 
 def kalshi_order_type(order_type: OrderType) -> str:
     if order_type == OrderType.LIMIT:
@@ -39,9 +35,9 @@ def kalshi_order_type(order_type: OrderType) -> str:
         return 'market'
     raise ValueError(f'unsupported order type: {order_type}')
 
-def kalshi_time_in_force(time_in_force: TimeInForce) -> str | None:
+def kalshi_time_in_force(time_in_force: TimeInForce) -> str:
     if time_in_force == TimeInForce.GTC:
-        return None
+        return 'good_till_canceled'
     if time_in_force == TimeInForce.IOC:
         return 'immediate_or_cancel'
     if time_in_force == TimeInForce.FOK:
