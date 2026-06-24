@@ -52,6 +52,7 @@ class KalshiExecutionClient(LiveExecutionClient):
         self._account_id = AccountId(f'{(name or KALSHI_VENUE.value)}-001')
 
     async def _connect(self) -> None:
+        self._set_account_id(self._account_id)
         await self._instrument_provider.initialize()
         await self._update_account_state()
 

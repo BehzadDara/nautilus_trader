@@ -32,6 +32,7 @@ async def main() -> None:
     provider = KalshiInstrumentProvider(http_client=http, clock=clock, config=KalshiInstrumentProviderConfig(load_status="open"))
     config = KalshiExecClientConfig(api_key_id=api_key_id, private_key_pem=pem)
     client = KalshiExecutionClient(loop=asyncio.get_event_loop(), client=http, msgbus=msgbus, cache=cache, clock=clock, instrument_provider=provider, config=config, name="KALSHI")
+    client._set_account_id(client._account_id)
 
     print("[1] Account balance (signed) ...")
     balance = await http.get("/portfolio/balance")
