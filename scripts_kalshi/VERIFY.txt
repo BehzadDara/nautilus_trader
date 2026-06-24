@@ -1,16 +1,13 @@
-VERIFY SCRIPTS
+Sample Env set: $env:VERIFY_TICKER="KXMENWORLDCUP-26-FR"
+Sample Env remove: Remove-Item Env:VERIFY_TICKER
 
-Sync + cd first:
-  & ".\sync_to_venv.ps1"; cd D:\Projects\Nautilustrader\scripts_kalshi
-
-Creds load from .env. Env vars last for the window only (Remove-Item Env:NAME to clear).
-
-Slice A (data):       python .\verify_slice_a.py        -> SLICE A OK
+Slice A (data):       
+  python .\verify_slice_a.py
   VERIFY_TICKER  (default: busiest market)
   VERIFY_SECS    (default: 20)
 
-Slice B (execution):  python .\verify_slice_b.py        -> read-only, safe
-  VERIFY_PLACE_ORDER=1   places a real 1-contract demo order then cancels (needs funded account)
-
-Example:
-  $env:VERIFY_TICKER="KXMENWORLDCUP-26-FR"; python .\verify_slice_a.py
+Slice B (execution):  places + cancels a real 1-contract demo order (needs funded account)
+  python .\verify_slice_b.py
+  VERIFY_TICKER  (default: KXMENWORLDCUP-26-FR)
+  VERIFY_SIDE    (default: yes ; accepts yes/no)
+  VERIFY_AMOUNT  (default: 1 ; limit price in cents)

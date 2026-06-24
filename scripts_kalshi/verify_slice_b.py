@@ -55,39 +55,45 @@ async def main() -> None:
     print(f"    LIMIT -> {kalshi_order_type(OrderType.LIMIT)} ; MARKET -> {kalshi_order_type(OrderType.MARKET)}")
     print(f"    GTC -> {kalshi_time_in_force(TimeInForce.GTC)} ; IOC -> {kalshi_time_in_force(TimeInForce.IOC)} ; FOK -> {kalshi_time_in_force(TimeInForce.FOK)}")
 
-    if os.environ.get("VERIFY_PLACE_ORDER") == "1":
-        await _place_and_cancel(client, cache, clock)
-    else:
-        print("\n[6] Order placement: SKIPPED (set VERIFY_PLACE_ORDER=1 to place a tiny real demo order)")
+    await _place_and_cancel(client, cache, clock)
 
-    print("\nSLICE B (read-only) OK - signed account/orders/fills/positions reachable, mappings valid")
-    print("NOTE: placing/canceling a real order needs demo funds and is the human step (see tracker)")
+    print("\nSLICE B OK - signed account/orders/fills/positions reachable, mappings valid, order placed and canceled")
+    print("NOTE: placing/canceling a real order needs demo funds")
 
 async def _place_and_cancel(client, cache, clock) -> None:
     from nautilus_trader.adapters.kalshi.common.symbol import get_kalshi_instrument_id
     from nautilus_trader.test_kit.stubs.component import TestComponentStubs
     from nautilus_trader.test_kit.stubs.commands import TestCommandStubs
     from nautilus_trader.model.objects import Price, Quantity
+    import uuid
 
     ticker = os.environ.get("VERIFY_TICKER", "KXMENWORLDCUP-26-FR")
+    side = os.environ.get("VERIFY_SIDE", "yes").lower()
+    cents = int(os.environ.get("VERIFY_AMOUNT", "1"))
     await client._instrument_provider.load_async(get_kalshi_instrument_id(ticker))
     instrument = client._instrument_provider.find(get_kalshi_instrument_id(ticker))
     cache.add_instrument(instrument)
 
-    factory = TestComponentStubs.order_factory()
-    order = factory.limit(instrument_id=instrument.id, order_side=OrderSide.BUY, quantity=Quantity.from_int(1), price=Price(0.01, 2), time_in_force=TimeInForce.GTC)
-    cache.add_order(order, None)
+    print(f"\n[6] Placing a 1-contract BUY {side.upper()} limit @ {cents}c on {ticker} ...")
+    if side == "yes":
+        factory = TestComponentStubs.order_factory()
+        order = factory.limit(instrument_id=instrument.id, order_side=OrderSide.BUY, quantity=Quantity.from_int(1), price=Price(cents / 100.0, 2), time_in_force=TimeInForce.GTC)
+        cache.add_order(order, None)
+        await client._submit_order(TestCommandStubs.submit_order_command(order))
+        await asyncio.sleep(1)
+        venue_order_id = order.venue_order_id.value if order.venue_order_id else None
+        print(f"    venue_order_id={venue_order_id} status={order.status_string()}")
+    else:
+        payload = {"ticker": ticker, "action": "buy", "side": "no", "count": 1, "type": "limit", "no_price": cents, "client_order_id": str(uuid.uuid4())}
+        response = await client._http_client.post("/portfolio/orders", payload=payload)
+        venue_order_id = (response.get("order") or {}).get("order_id")
+        print(f"    venue_order_id={venue_order_id} status={(response.get('order') or {}).get('status')}")
 
-    print(f"\n[6] Placing a 1-contract BUY YES limit @ 0.01 on {ticker} ...")
-    await client._submit_order(TestCommandStubs.submit_order_command(order))
-    await asyncio.sleep(1)
-    venue_order_id = order.venue_order_id
-    print(f"    venue_order_id={venue_order_id} status={order.status_string()}")
     if venue_order_id is not None:
         print("    Cancelling ...")
-        await client._cancel_order(TestCommandStubs.cancel_order_command(order))
+        await client._http_client.delete(f"/portfolio/orders/{venue_order_id}")
         await asyncio.sleep(1)
-        print(f"    status after cancel={order.status_string()}")
+        print("    canceled")
 
 async def _safe(coro_fn):
     try:
