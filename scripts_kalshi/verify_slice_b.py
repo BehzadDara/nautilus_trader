@@ -56,16 +56,16 @@ async def main() -> None:
     print(f"    LIMIT -> {kalshi_order_type(OrderType.LIMIT)} ; MARKET -> {kalshi_order_type(OrderType.MARKET)}")
     print(f"    GTC -> {kalshi_time_in_force(TimeInForce.GTC)} ; IOC -> {kalshi_time_in_force(TimeInForce.IOC)} ; FOK -> {kalshi_time_in_force(TimeInForce.FOK)}")
 
-    placed = await _place_and_cancel(client, cache, clock)
+    placed = await _place_order(client, cache, clock)
 
     if placed:
-        print("\nSLICE B OK - order placed, acknowledged and canceled on demo")
+        print("\nSLICE B OK - order placed and acknowledged on demo")
     else:
         print("\nSLICE B PARTIAL - read-only paths OK, but the order was not accepted")
         print("  most likely cause: the demo account has no funds (balance_dollars=0.0000 above)")
         print("  add demo funds at https://demo.kalshi.co, then re-run")
 
-async def _place_and_cancel(client, cache, clock) -> bool:
+async def _place_order(client, cache, clock) -> bool:
     from nautilus_trader.adapters.kalshi.common.symbol import get_kalshi_instrument_id
     from nautilus_trader.test_kit.stubs.component import TestComponentStubs
     from nautilus_trader.test_kit.stubs.commands import TestCommandStubs
@@ -110,14 +110,7 @@ async def _place_and_cancel(client, cache, clock) -> bool:
     if reject["reason"]:
         print(f"    REJECTED by venue: {reject['reason']}")
 
-    if venue_order_id is None:
-        return False
-
-    print("    Cancelling ...")
-    await client._http_client.delete(f"/portfolio/orders/{venue_order_id}")
-    await asyncio.sleep(1)
-    print("    canceled")
-    return True
+    return venue_order_id is not None
 
 async def _safe(coro_fn):
     try:
