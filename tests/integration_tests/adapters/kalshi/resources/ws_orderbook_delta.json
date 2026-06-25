@@ -1,0 +1,12 @@
+{
+  "type": "orderbook_delta",
+  "sid": 1,
+  "seq": 2,
+  "msg": {
+    "market_ticker": "KXMENWORLDCUP-26-FR",
+    "market_id": "37f9eca5-1d94-4876-971a-5f50275ba2f5",
+    "side": "yes",
+    "price_dollars": "0.1600",
+    "delta_fp": "25.00"
+  }
+}

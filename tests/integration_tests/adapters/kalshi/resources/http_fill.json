@@ -1,0 +1,19 @@
+{
+  "action": "sell",
+  "book_side": "ask",
+  "count_fp": "6.26",
+  "created_time": "2026-06-24T15:20:19.894475Z",
+  "fee_cost": "0.052800",
+  "fill_id": "340622d8-3cce-4168-02a2-21d9c5feea04",
+  "is_taker": true,
+  "market_ticker": "KXMENWORLDCUP-26-AR",
+  "no_price_dollars": "0.8600",
+  "order_id": "b3ac9b7a-7fc9-431f-a517-f13ca1de66ff",
+  "outcome_side": "no",
+  "side": "no",
+  "subaccount_number": 0,
+  "ticker": "KXMENWORLDCUP-26-AR",
+  "trade_id": "340622d8-3cce-4168-02a2-21d9c5feea04",
+  "ts": 1782314419,
+  "yes_price_dollars": "0.1400"
+}
