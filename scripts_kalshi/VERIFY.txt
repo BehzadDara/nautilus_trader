@@ -6,8 +6,11 @@ Slice A (data):
   VERIFY_TICKER  (default: busiest market)
   VERIFY_SECS    (default: 20)
 
-Slice B (execution):  places + cancels a real 1-contract demo order (needs funded account)
+Slice B (execution):
   python .\verify_slice_b.py
   VERIFY_TICKER  (default: KXMENWORLDCUP-26-FR)
   VERIFY_SIDE    (default: yes ; accepts yes/no)
   VERIFY_AMOUNT  (default: 1 ; limit price in cents)
+
+Unit tests (no network):
+  .\run_tests.ps1
