@@ -134,45 +134,42 @@ class KalshiExecutionClient(LiveExecutionClient):
                 reports.append(report)
         return reports
 
-    def _order_price(self, order: dict[str, Any]) -> Price | None:
-        if order.get('price') is not None:
-            return Price(float(order['price']), 2)
-        if order.get('yes_price') is not None:
-            return Price(float(order['yes_price']) / 100.0, 2)
+    def _yes_price(self, data: dict[str, Any]) -> Price | None:
+        if data.get('yes_price_dollars') is not None:
+            return Price(float(data['yes_price_dollars']), 2)
         return None
 
-    def _order_side(self, order: dict[str, Any]) -> OrderSide:
-        side = order.get('side')
-        if side in ('bid', 'ask'):
-            return order_side_from_kalshi_side(side)
-        return OrderSide.SELL if order.get('action') == 'sell' else OrderSide.BUY
+    def _book_side(self, data: dict[str, Any]) -> OrderSide:
+        return order_side_from_kalshi_side(data.get('book_side', 'bid'))
 
     def _parse_order_report(self, order: dict[str, Any]) -> OrderStatusReport | None:
         ticker = order.get('ticker')
         if not ticker:
             return None
         instrument_id = get_kalshi_instrument_id(ticker)
-        price = self._order_price(order)
-        count = int(float(order.get('initial_count') or order.get('count') or 0))
-        filled = count - int(float(order.get('remaining_count') or 0))
+        price = self._yes_price(order)
+        count = float(order.get('initial_count_fp') or 0)
+        filled = float(order.get('fill_count_fp') or 0)
         now = self._clock.timestamp_ns()
-        return OrderStatusReport(account_id=self._account_id, instrument_id=instrument_id, venue_order_id=VenueOrderId(str(order['order_id'])), order_side=self._order_side(order), order_type=OrderType.LIMIT if price is not None else OrderType.MARKET, time_in_force=TimeInForce.GTC, order_status=order_status_from_kalshi(order.get('status', 'resting')), quantity=Quantity.from_int(count), filled_qty=Quantity.from_int(filled), report_id=UUID4(), ts_accepted=now, ts_last=now, ts_init=now, client_order_id=ClientOrderId(order['client_order_id']) if order.get('client_order_id') else None, price=price)
+        return OrderStatusReport(account_id=self._account_id, instrument_id=instrument_id, venue_order_id=VenueOrderId(str(order['order_id'])), order_side=self._book_side(order), order_type=OrderType.LIMIT if order.get('type') == 'limit' else OrderType.MARKET, time_in_force=TimeInForce.GTC, order_status=order_status_from_kalshi(order.get('status', 'resting')), quantity=Quantity(count, 2), filled_qty=Quantity(filled, 2), report_id=UUID4(), ts_accepted=now, ts_last=now, ts_init=now, client_order_id=ClientOrderId(order['client_order_id']) if order.get('client_order_id') else None, price=price)
 
     def _parse_fill_report(self, fill: dict[str, Any]) -> FillReport | None:
         ticker = fill.get('ticker')
         if not ticker:
             return None
         instrument_id = get_kalshi_instrument_id(ticker)
-        last_px = self._order_price(fill) or Price(0.0, 2)
+        last_px = self._yes_price(fill) or Price(0.0, 2)
         now = self._clock.timestamp_ns()
-        return FillReport(account_id=self._account_id, instrument_id=instrument_id, venue_order_id=VenueOrderId(str(fill['order_id'])), trade_id=TradeId(str(fill.get('trade_id') or fill.get('fill_id'))), order_side=self._order_side(fill), last_qty=Quantity.from_int(int(float(fill.get('count') or 0))), last_px=last_px, commission=Money(Decimal(0), USD), liquidity_side=LiquiditySide.TAKER if fill.get('is_taker') else LiquiditySide.MAKER, report_id=UUID4(), ts_event=now, ts_init=now)
+        return FillReport(account_id=self._account_id, instrument_id=instrument_id, venue_order_id=VenueOrderId(str(fill['order_id'])), trade_id=TradeId(str(fill.get('trade_id') or fill.get('fill_id'))), order_side=self._book_side(fill), last_qty=Quantity(float(fill.get('count_fp') or 0), 2), last_px=last_px, commission=Money(Decimal(str(fill.get('fee_cost') or 0)), USD), liquidity_side=LiquiditySide.TAKER if fill.get('is_taker') else LiquiditySide.MAKER, report_id=UUID4(), ts_event=now, ts_init=now)
 
     def _parse_position_report(self, position: dict[str, Any]) -> PositionStatusReport | None:
         ticker = position.get('ticker')
         if not ticker:
             return None
+        net = float(position.get('position_fp') or 0)
+        if net == 0:
+            return None
         instrument_id = get_kalshi_instrument_id(ticker)
-        net = int(position.get('position') or 0)
-        side = PositionSide.LONG if net > 0 else PositionSide.SHORT if net < 0 else PositionSide.FLAT
+        side = PositionSide.LONG if net > 0 else PositionSide.SHORT
         now = self._clock.timestamp_ns()
-        return PositionStatusReport(account_id=self._account_id, instrument_id=instrument_id, position_side=side, quantity=Quantity.from_int(abs(net)), report_id=UUID4(), ts_last=now, ts_init=now)
+        return PositionStatusReport(account_id=self._account_id, instrument_id=instrument_id, position_side=side, quantity=Quantity(abs(net), 2), report_id=UUID4(), ts_last=now, ts_init=now)
