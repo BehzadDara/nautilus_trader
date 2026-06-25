@@ -69,7 +69,7 @@ async def _place_order(client, cache, clock) -> bool:
     from nautilus_trader.test_kit.stubs.commands import TestCommandStubs
     from nautilus_trader.model.objects import Price, Quantity
 
-    ticker = os.environ.get("VERIFY_TICKER", "KXMENWORLDCUP-26-FR")
+    ticker = os.environ.get("VERIFY_TICKER", "KXMENWORLDCUP-26-BR")
     side = os.environ.get("VERIFY_SIDE", "yes").lower()
     cents = int(os.environ.get("VERIFY_AMOUNT", "1"))
     await client._instrument_provider.load_async(get_kalshi_instrument_id(ticker))
