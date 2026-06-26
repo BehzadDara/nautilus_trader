@@ -13,12 +13,16 @@ from nautilus_trader.adapters.kalshi.config import KalshiExecClientConfig
 from nautilus_trader.adapters.kalshi.http.errors import KalshiHttpError
 from nautilus_trader.adapters.kalshi.providers import KalshiInstrumentProvider
 from nautilus_trader.core.uuid import UUID4
+from nautilus_trader.execution.messages import BatchCancelOrders
+from nautilus_trader.execution.messages import CancelAllOrders
 from nautilus_trader.execution.messages import CancelOrder
 from nautilus_trader.execution.messages import GenerateFillReports
 from nautilus_trader.execution.messages import GenerateOrderStatusReport
 from nautilus_trader.execution.messages import GenerateOrderStatusReports
 from nautilus_trader.execution.messages import GeneratePositionStatusReports
+from nautilus_trader.execution.messages import ModifyOrder
 from nautilus_trader.execution.messages import SubmitOrder
+from nautilus_trader.execution.messages import SubmitOrderList
 from nautilus_trader.execution.reports import FillReport
 from nautilus_trader.execution.reports import OrderStatusReport
 from nautilus_trader.execution.reports import PositionStatusReport
@@ -64,21 +68,29 @@ class KalshiExecutionClient(LiveExecutionClient):
         balance = AccountBalance(total=Money(total, USD), locked=Money(Decimal(0), USD), free=Money(total, USD))
         self.generate_account_state(balances=[balance], margins=[], reported=True, ts_event=self._clock.timestamp_ns())
 
+    def _order_payload(self, order: Order) -> dict[str, Any]:
+        payload: dict[str, Any] = {'ticker': get_kalshi_ticker(order.instrument_id), 'side': kalshi_side_from_order_side(order.side).value, 'count': f'{order.quantity.as_double():.2f}', 'time_in_force': kalshi_time_in_force(order.time_in_force), 'self_trade_prevention_type': 'taker_at_cross', 'client_order_id': order.client_order_id.value}
+        if order.order_type == OrderType.LIMIT:
+            payload['price'] = f'{float(order.price):.4f}'
+        return payload
+
+    def _resolve_venue_order_id(self, instrument_id: Any, client_order_id: ClientOrderId, venue_order_id: VenueOrderId | None) -> VenueOrderId | None:
+        if venue_order_id is not None:
+            return venue_order_id
+        order = self._cache.order(client_order_id)
+        return order.venue_order_id if order is not None and order.venue_order_id is not None else None
+
     async def _submit_order(self, command: SubmitOrder) -> None:
         order: Order = command.order
-        instrument = self._cache.instrument(command.instrument_id)
-        if instrument is None:
+        if self._cache.instrument(command.instrument_id) is None:
             self.generate_order_rejected(command.strategy_id, command.instrument_id, order.client_order_id, f'no instrument for {command.instrument_id}', self._clock.timestamp_ns())
             return
         if order.order_type not in (OrderType.LIMIT, OrderType.MARKET):
             self.generate_order_rejected(command.strategy_id, command.instrument_id, order.client_order_id, f'unsupported order type {order.order_type}', self._clock.timestamp_ns())
             return
         self.generate_order_submitted(command.strategy_id, command.instrument_id, order.client_order_id, self._clock.timestamp_ns())
-        payload: dict[str, Any] = {'ticker': get_kalshi_ticker(command.instrument_id), 'side': kalshi_side_from_order_side(order.side).value, 'count': f'{order.quantity.as_double():.2f}', 'time_in_force': kalshi_time_in_force(order.time_in_force), 'self_trade_prevention_type': 'taker_at_cross', 'client_order_id': order.client_order_id.value}
-        if order.order_type == OrderType.LIMIT:
-            payload['price'] = f'{float(order.price):.4f}'
         try:
-            response = await self._http_client.post('/portfolio/events/orders', payload=payload)
+            response = await self._http_client.post('/portfolio/events/orders', payload=self._order_payload(order))
         except KalshiHttpError as e:
             self.generate_order_rejected(command.strategy_id, command.instrument_id, order.client_order_id, str(e), self._clock.timestamp_ns())
             return
@@ -86,16 +98,97 @@ class KalshiExecutionClient(LiveExecutionClient):
         if venue_order_id:
             self.generate_order_accepted(command.strategy_id, command.instrument_id, order.client_order_id, VenueOrderId(str(venue_order_id)), self._clock.timestamp_ns())
 
+    async def _submit_order_list(self, command: SubmitOrderList) -> None:
+        orders = command.order_list.orders
+        for order in orders:
+            self.generate_order_submitted(command.strategy_id, order.instrument_id, order.client_order_id, self._clock.timestamp_ns())
+        payload = {'orders': [self._order_payload(order) for order in orders]}
+        try:
+            response = await self._http_client.post('/portfolio/events/orders/batched', payload=payload)
+        except KalshiHttpError as e:
+            for order in orders:
+                self.generate_order_rejected(command.strategy_id, order.instrument_id, order.client_order_id, str(e), self._clock.timestamp_ns())
+            return
+        results = response.get('orders') or [] if response else []
+        for order, result in zip(orders, results):
+            error = result.get('error')
+            if error:
+                self.generate_order_rejected(command.strategy_id, order.instrument_id, order.client_order_id, str(error), self._clock.timestamp_ns())
+            elif result.get('order_id'):
+                self.generate_order_accepted(command.strategy_id, order.instrument_id, order.client_order_id, VenueOrderId(str(result['order_id'])), self._clock.timestamp_ns())
+
+    async def _modify_order(self, command: ModifyOrder) -> None:
+        venue_order_id = self._resolve_venue_order_id(command.instrument_id, command.client_order_id, command.venue_order_id)
+        if venue_order_id is None:
+            self.generate_order_modify_rejected(command.strategy_id, command.instrument_id, command.client_order_id, None, 'no venue order id', self._clock.timestamp_ns())
+            return
+        order = self._cache.order(command.client_order_id)
+        if order is None:
+            self.generate_order_modify_rejected(command.strategy_id, command.instrument_id, command.client_order_id, venue_order_id, 'order not in cache', self._clock.timestamp_ns())
+            return
+        price = command.price if command.price is not None else order.price
+        count = command.quantity if command.quantity is not None else order.quantity
+        payload = {'ticker': get_kalshi_ticker(command.instrument_id), 'side': kalshi_side_from_order_side(order.side).value, 'price': f'{float(price):.4f}', 'count': f'{count.as_double():.2f}'}
+        try:
+            await self._http_client.post(f'/portfolio/events/orders/{venue_order_id.value}/amend', payload=payload)
+        except KalshiHttpError as e:
+            self.generate_order_modify_rejected(command.strategy_id, command.instrument_id, command.client_order_id, venue_order_id, str(e), self._clock.timestamp_ns())
+            return
+        self.generate_order_updated(command.strategy_id, command.instrument_id, command.client_order_id, venue_order_id, count, price, None, self._clock.timestamp_ns())
+
     async def _cancel_order(self, command: CancelOrder) -> None:
-        if command.venue_order_id is None:
-            self._log.error(f'Cannot cancel order {command.client_order_id}: no venue order id')
+        venue_order_id = self._resolve_venue_order_id(command.instrument_id, command.client_order_id, command.venue_order_id)
+        if venue_order_id is None:
+            self.generate_order_cancel_rejected(command.strategy_id, command.instrument_id, command.client_order_id, None, 'no venue order id', self._clock.timestamp_ns())
             return
         try:
-            await self._http_client.delete(f'/portfolio/orders/{command.venue_order_id.value}')
+            await self._http_client.delete(f'/portfolio/events/orders/{venue_order_id.value}')
         except KalshiHttpError as e:
-            self._log.error(f'Failed to cancel order {command.venue_order_id}: {e}')
+            self.generate_order_cancel_rejected(command.strategy_id, command.instrument_id, command.client_order_id, venue_order_id, str(e), self._clock.timestamp_ns())
             return
-        self.generate_order_canceled(command.strategy_id, command.instrument_id, command.client_order_id, command.venue_order_id, self._clock.timestamp_ns())
+        self.generate_order_canceled(command.strategy_id, command.instrument_id, command.client_order_id, venue_order_id, self._clock.timestamp_ns())
+
+    async def _batch_cancel_orders(self, command: BatchCancelOrders) -> None:
+        entries = []
+        mapping = []
+        for cancel in command.cancels:
+            venue_order_id = self._resolve_venue_order_id(cancel.instrument_id, cancel.client_order_id, cancel.venue_order_id)
+            if venue_order_id is None:
+                self.generate_order_cancel_rejected(command.strategy_id, cancel.instrument_id, cancel.client_order_id, None, 'no venue order id', self._clock.timestamp_ns())
+                continue
+            entries.append({'order_id': venue_order_id.value})
+            mapping.append((cancel, venue_order_id))
+        if not entries:
+            return
+        try:
+            await self._http_client.delete('/portfolio/events/orders/batched', payload={'orders': entries})
+        except KalshiHttpError as e:
+            for cancel, venue_order_id in mapping:
+                self.generate_order_cancel_rejected(command.strategy_id, cancel.instrument_id, cancel.client_order_id, venue_order_id, str(e), self._clock.timestamp_ns())
+            return
+        for cancel, venue_order_id in mapping:
+            self.generate_order_canceled(command.strategy_id, cancel.instrument_id, cancel.client_order_id, venue_order_id, self._clock.timestamp_ns())
+
+    async def _cancel_all_orders(self, command: CancelAllOrders) -> None:
+        open_orders = self._cache.orders_open(instrument_id=command.instrument_id)
+        entries = []
+        mapping = []
+        for order in open_orders:
+            if command.order_side is not None and command.order_side != OrderSide.NO_ORDER_SIDE and order.side != command.order_side:
+                continue
+            if order.venue_order_id is None:
+                continue
+            entries.append({'order_id': order.venue_order_id.value})
+            mapping.append(order)
+        if not entries:
+            return
+        try:
+            await self._http_client.delete('/portfolio/events/orders/batched', payload={'orders': entries})
+        except KalshiHttpError as e:
+            self._log.error(f'Failed to cancel all orders: {e}')
+            return
+        for order in mapping:
+            self.generate_order_canceled(command.strategy_id, order.instrument_id, order.client_order_id, order.venue_order_id, self._clock.timestamp_ns())
 
     async def generate_order_status_reports(self, command: GenerateOrderStatusReports) -> list[OrderStatusReport]:
         response = await self._http_client.get('/portfolio/orders', params={'limit': 1000})

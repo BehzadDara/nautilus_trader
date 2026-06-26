@@ -1,6 +1,7 @@
 from __future__ import annotations
 import hashlib
 import time
+from decimal import ROUND_CEILING
 from decimal import Decimal
 from typing import Any
 import pandas as pd
@@ -87,3 +88,10 @@ def parse_kalshi_trade(instrument: BinaryOption, msg: dict[str, Any], sequence: 
     taker_side = msg.get('taker_side')
     aggressor = AggressorSide.BUYER if taker_side == 'yes' else AggressorSide.SELLER if taker_side == 'no' else AggressorSide.NO_AGGRESSOR
     return TradeTick(instrument_id=instrument.id, price=instrument.make_price(float(price)), size=instrument.make_qty(float(size)), aggressor_side=aggressor, trade_id=_kalshi_trade_id(str(instrument.raw_symbol), msg, sequence), ts_event=ts_event, ts_init=ts_init)
+
+KALSHI_FEE_RATE = Decimal('0.07')
+_CENTICENT = Decimal('0.0001')
+
+def calculate_kalshi_commission(quantity: Decimal, price: Decimal, fee_rate: Decimal=KALSHI_FEE_RATE) -> Decimal:
+    fee = fee_rate * quantity * price * (Decimal(1) - price)
+    return fee.quantize(_CENTICENT, rounding=ROUND_CEILING)

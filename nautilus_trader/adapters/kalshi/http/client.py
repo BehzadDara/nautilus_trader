@@ -91,8 +91,8 @@ class KalshiHttpClient:
     async def post(self, endpoint: str, payload: dict[str, Any] | None=None) -> Any:
         return await self.request(HttpMethod.POST, endpoint, payload=payload)
 
-    async def delete(self, endpoint: str, params: dict[str, Any] | None=None) -> Any:
-        return await self.request(HttpMethod.DELETE, endpoint, params=params)
+    async def delete(self, endpoint: str, params: dict[str, Any] | None=None, payload: dict[str, Any] | None=None) -> Any:
+        return await self.request(HttpMethod.DELETE, endpoint, params=params, payload=payload)
 
     @staticmethod
     def path_without_query(url: str) -> str:
