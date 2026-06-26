@@ -1,0 +1,18 @@
+KALSHI SETUP
+
+1. Log in to Kalshi -> Settings -> API Keys -> Create key.
+   You get a Key ID and download a private key (.pem) file.
+
+2. Put the .pem somewhere safe, e.g.  D:\secrets\kalshi_private_key.pem
+   (any path works; never commit it to git)
+
+3. Copy .env.example to .env and fill in:
+
+   KALSHI_API_KEY_ID=<the Key ID from step 1>
+   KALSHI_PRIVATE_KEY_PATH=<full path to your .pem from step 2>
+   KALSHI_BASE_URL_HTTP=https://demo-api.kalshi.co
+   KALSHI_BASE_URL_WS=wss://demo-api.kalshi.co/trade-api/ws/v2
+
+   (For real money use api.elections.kalshi.com instead of demo-api.kalshi.co)
+
+Done. The adapter reads these automatically.
