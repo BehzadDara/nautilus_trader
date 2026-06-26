@@ -10,7 +10,8 @@ Slice B (execution):
   python .\verify_slice_b.py
   VERIFY_TICKER  (default: KXMENWORLDCUP-26-FR)
   VERIFY_SIDE    (default: yes ; accepts yes/no)
-  VERIFY_AMOUNT  (default: 1 ; limit price in cents)
+  VERIFY_AMOUNT  (default: 1 ; limit price in cents, 1-99)
+  VERIFY_COUNT   (default: 1 ; number of contracts ; total cost = AMOUNT/100 * COUNT)
 
 Unit tests (no network):
   .\run_tests.ps1

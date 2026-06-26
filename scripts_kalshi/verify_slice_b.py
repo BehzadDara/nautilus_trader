@@ -72,6 +72,7 @@ async def _place_order(client, cache, clock) -> bool:
     ticker = os.environ.get("VERIFY_TICKER", "KXMENWORLDCUP-26-FR")
     side = os.environ.get("VERIFY_SIDE", "yes").lower()
     cents = int(os.environ.get("VERIFY_AMOUNT", "1"))
+    count = int(os.environ.get("VERIFY_COUNT", "1"))
     await client._instrument_provider.load_async(get_kalshi_instrument_id(ticker))
     instrument = client._instrument_provider.find(get_kalshi_instrument_id(ticker))
     cache.add_instrument(instrument)
@@ -98,9 +99,9 @@ async def _place_order(client, cache, clock) -> bool:
         order_side = OrderSide.SELL
         yes_price = 1.0 - cents / 100.0
 
-    print(f"\n[6] Placing 1 contract {side.upper()} @ {cents}c (YES leg {order_side.name} @ {yes_price:.2f}) on {ticker} ...")
+    print(f"\n[6] Placing {count} contract(s) {side.upper()} @ {cents}c (YES leg {order_side.name} @ {yes_price:.2f}, ~${count * cents / 100.0:.2f}) on {ticker} ...")
     factory = TestComponentStubs.order_factory()
-    order = factory.limit(instrument_id=instrument.id, order_side=order_side, quantity=Quantity.from_int(1), price=Price(yes_price, 2), time_in_force=TimeInForce.GTC)
+    order = factory.limit(instrument_id=instrument.id, order_side=order_side, quantity=Quantity.from_int(count), price=Price(yes_price, 2), time_in_force=TimeInForce.GTC)
     cache.add_order(order, None)
     await client._submit_order(TestCommandStubs.submit_order_command(order))
     await asyncio.sleep(1)
