@@ -3,8 +3,13 @@ import asyncio
 from typing import Any
 import msgspec
 from nautilus_trader.adapters.kalshi.common.constants import KALSHI_VENUE
+from nautilus_trader.adapters.kalshi.common.parsing import kalshi_candle_period_minutes
 from nautilus_trader.adapters.kalshi.common.parsing import parse_kalshi_book_delta
 from nautilus_trader.adapters.kalshi.common.parsing import parse_kalshi_book_snapshot
+from nautilus_trader.adapters.kalshi.common.parsing import parse_kalshi_candle
+from nautilus_trader.adapters.kalshi.common.parsing import parse_kalshi_lifecycle
+from nautilus_trader.adapters.kalshi.common.parsing import parse_kalshi_rest_orderbook
+from nautilus_trader.adapters.kalshi.common.parsing import parse_kalshi_rest_trade
 from nautilus_trader.adapters.kalshi.common.parsing import parse_kalshi_trade
 from nautilus_trader.adapters.kalshi.common.symbol import get_kalshi_instrument_id
 from nautilus_trader.adapters.kalshi.common.symbol import get_kalshi_ticker
@@ -14,11 +19,21 @@ from nautilus_trader.adapters.kalshi.websocket.client import KalshiWebSocketClie
 from nautilus_trader.adapters.kalshi.websocket.types import KalshiWebSocketChannel
 from nautilus_trader.common.enums import LogColor
 from nautilus_trader.core.datetime import secs_to_nanos
+from nautilus_trader.data.messages import RequestBars
 from nautilus_trader.data.messages import RequestInstrument
 from nautilus_trader.data.messages import RequestInstruments
+from nautilus_trader.data.messages import RequestOrderBookSnapshot
+from nautilus_trader.data.messages import RequestQuoteTicks
+from nautilus_trader.data.messages import RequestTradeTicks
+from nautilus_trader.data.messages import SubscribeBars
+from nautilus_trader.data.messages import SubscribeInstruments
+from nautilus_trader.data.messages import SubscribeInstrumentStatus
 from nautilus_trader.data.messages import SubscribeOrderBook
 from nautilus_trader.data.messages import SubscribeQuoteTicks
 from nautilus_trader.data.messages import SubscribeTradeTicks
+from nautilus_trader.data.messages import UnsubscribeBars
+from nautilus_trader.data.messages import UnsubscribeInstruments
+from nautilus_trader.data.messages import UnsubscribeInstrumentStatus
 from nautilus_trader.data.messages import UnsubscribeOrderBook
 from nautilus_trader.data.messages import UnsubscribeQuoteTicks
 from nautilus_trader.data.messages import UnsubscribeTradeTicks
@@ -127,6 +142,26 @@ class KalshiDataClient(LiveMarketDataClient):
     async def _unsubscribe_trade_ticks(self, command: UnsubscribeTradeTicks) -> None:
         await self._ws_client.unsubscribe(KalshiWebSocketChannel.TRADE.value, market_ticker=get_kalshi_ticker(command.instrument_id))
 
+    async def _subscribe_instrument_status(self, command: SubscribeInstrumentStatus) -> None:
+        await self._ws_client.subscribe(KalshiWebSocketChannel.MARKET_LIFECYCLE.value)
+        await self._ensure_connected()
+
+    async def _unsubscribe_instrument_status(self, command: UnsubscribeInstrumentStatus) -> None:
+        await self._ws_client.unsubscribe(KalshiWebSocketChannel.MARKET_LIFECYCLE.value)
+
+    async def _subscribe_instruments(self, command: SubscribeInstruments) -> None:
+        await self._ws_client.subscribe(KalshiWebSocketChannel.MARKET_LIFECYCLE.value)
+        await self._ensure_connected()
+
+    async def _unsubscribe_instruments(self, command: UnsubscribeInstruments) -> None:
+        await self._ws_client.unsubscribe(KalshiWebSocketChannel.MARKET_LIFECYCLE.value)
+
+    async def _subscribe_bars(self, command: SubscribeBars) -> None:
+        self._log.error(f'Cannot subscribe to {command.bar_type} bars: Kalshi does not stream bars; use request_bars for candlestick history')
+
+    async def _unsubscribe_bars(self, command: UnsubscribeBars) -> None:
+        self._log.error(f'Cannot unsubscribe from {command.bar_type} bars: not streamed by Kalshi')
+
     def _discard_local_state_if_unwanted(self, instrument_id: InstrumentId) -> None:
         if instrument_id not in self.subscribed_order_book_deltas() and instrument_id not in self.subscribed_quote_ticks():
             self._local_books.pop(instrument_id, None)
@@ -142,6 +177,74 @@ class KalshiDataClient(LiveMarketDataClient):
     async def _request_instruments(self, request: RequestInstruments) -> None:
         target = [i for i in self._instrument_provider.get_all().values() if i.venue == request.venue]
         self._handle_instruments(request.venue, target, request.id, request.start, request.end, request.params)
+
+    async def _request_order_book_snapshot(self, request: RequestOrderBookSnapshot) -> None:
+        instrument = self._cache.instrument(request.instrument_id)
+        if instrument is None:
+            self._log.error(f'Cannot find instrument for {request.instrument_id}')
+            return
+        ticker = get_kalshi_ticker(request.instrument_id)
+        response = await self._http_client.get(f'/markets/{ticker}/orderbook')
+        orderbook = response.get('orderbook_fp') or response.get('orderbook') or {} if response else {}
+        now = self._clock.timestamp_ns()
+        deltas = parse_kalshi_rest_orderbook(instrument, orderbook, now, now)
+        self._handle_data(deltas)
+
+    async def _request_quote_ticks(self, request: RequestQuoteTicks) -> None:
+        self._log.error('Cannot request historical quotes: not published by Kalshi')
+
+    async def _request_trade_ticks(self, request: RequestTradeTicks) -> None:
+        instrument = self._cache.instrument(request.instrument_id)
+        if instrument is None:
+            self._log.error(f'Cannot find instrument for {request.instrument_id}')
+            return
+        ticker = get_kalshi_ticker(request.instrument_id)
+        params: dict[str, Any] = {'ticker': ticker, 'limit': request.limit or 1000}
+        if request.start is not None:
+            params['min_ts'] = int(request.start.timestamp())
+        if request.end is not None:
+            params['max_ts'] = int(request.end.timestamp())
+        now = self._clock.timestamp_ns()
+        trades = []
+        cursor = None
+        while True:
+            if cursor:
+                params['cursor'] = cursor
+            response = await self._http_client.get('/markets/trades', params=params)
+            page = response.get('trades') or [] if response else []
+            for trade in page:
+                try:
+                    trades.append(parse_kalshi_rest_trade(instrument, trade, now))
+                except (KeyError, ValueError) as e:
+                    self._log.warning(f'Skipping unparsable trade: {e}')
+            cursor = response.get('cursor') if response else None
+            if not cursor or not page or (request.limit and len(trades) >= request.limit):
+                break
+        self._handle_trade_ticks(request.instrument_id, trades, request.id, request.start, request.end, request.params)
+
+    async def _request_bars(self, request: RequestBars) -> None:
+        instrument = self._cache.instrument(request.bar_type.instrument_id)
+        if instrument is None:
+            self._log.error(f'Cannot find instrument for {request.bar_type.instrument_id}')
+            return
+        try:
+            period = kalshi_candle_period_minutes(request.bar_type)
+        except ValueError as e:
+            self._log.error(f'Cannot request bars: {e}')
+            return
+        ticker = get_kalshi_ticker(request.bar_type.instrument_id)
+        series = ticker.split('-')[0]
+        end_ts = int(request.end.timestamp()) if request.end is not None else int(self._clock.timestamp_ns() / 1_000_000_000)
+        start_ts = int(request.start.timestamp()) if request.start is not None else end_ts - period * 60 * 1000
+        params = {'start_ts': start_ts, 'end_ts': end_ts, 'period_interval': period}
+        response = await self._http_client.get(f'/series/{series}/markets/{ticker}/candlesticks', params=params)
+        now = self._clock.timestamp_ns()
+        bars = []
+        for candle in (response.get('candlesticks') or [] if response else []):
+            bar = parse_kalshi_candle(instrument, request.bar_type, candle, now)
+            if bar is not None:
+                bars.append(bar)
+        self._handle_bars(request.bar_type, bars, request.id, request.start, request.end, request.params)
 
     def _handle_raw_ws_message(self, raw: bytes) -> None:
         try:
@@ -161,13 +264,16 @@ class KalshiDataClient(LiveMarketDataClient):
         ticker = body.get('market_ticker')
         if not ticker:
             return
+        ts_event = secs_to_nanos(body['ts']) if body.get('ts') else self._clock.timestamp_ns()
+        ts_init = self._clock.timestamp_ns()
+        if msg_type == 'market_lifecycle_v2':
+            self._handle_data(parse_kalshi_lifecycle(get_kalshi_instrument_id(ticker), body, ts_event, ts_init))
+            return
         instrument = self._cache.instrument(get_kalshi_instrument_id(ticker))
         if instrument is None:
             self._log.error(f'Cannot find instrument for {ticker}')
             return
         sequence = msg.get('seq') or 0
-        ts_event = secs_to_nanos(body['ts']) if body.get('ts') else self._clock.timestamp_ns()
-        ts_init = self._clock.timestamp_ns()
         if msg_type == 'orderbook_snapshot':
             self._handle_book(instrument, parse_kalshi_book_snapshot(instrument, body, sequence, ts_event, ts_init))
         elif msg_type == 'orderbook_delta':

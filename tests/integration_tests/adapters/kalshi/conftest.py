@@ -37,3 +37,15 @@ def ws_orderbook_snapshot():
 @pytest.fixture
 def ws_orderbook_delta():
     return load_fixture("ws_orderbook_delta.json")
+
+@pytest.fixture
+def http_orderbook():
+    return load_fixture("http_orderbook.json")
+
+@pytest.fixture
+def http_trade():
+    return load_fixture("http_trade.json")
+
+@pytest.fixture
+def http_candlestick():
+    return load_fixture("http_candlestick.json")
