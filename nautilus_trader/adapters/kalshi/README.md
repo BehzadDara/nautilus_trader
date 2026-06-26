@@ -51,7 +51,10 @@ node.add_exec_client_factory("KALSHI", KalshiLiveExecClientFactory)
 - Market data: order book deltas (Yes orders = bids, No orders @ q = Yes asks @ 1-q),
   top-of-book quotes, trades.
 - Execution: submit limit/market orders (V2 endpoint, `side` = bid/ask, price in dollars),
-  cancel by venue order id, and order/fill/position status reports.
+  batch submit (`_submit_order_list`), cancel, batch cancel, cancel-all, amend/modify, and
+  order/fill/position status reports.
+- Fees: `KalshiFeeModel` (backtests) computes `ceil(0.07 * count * price * (1 - price))` to the
+  centicent; live fills use the venue's reported `fee_cost`. Verified equal to a real demo fill.
 
 ## Order side model
 
