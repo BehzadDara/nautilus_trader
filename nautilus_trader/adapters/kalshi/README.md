@@ -48,8 +48,13 @@ node.add_exec_client_factory("KALSHI", KalshiLiveExecClientFactory)
 ## What it supports
 
 - Instruments: load all (cursor-paginated) or by ticker, parsed to `BinaryOption`.
-- Market data: order book deltas (Yes orders = bids, No orders @ q = Yes asks @ 1-q),
-  top-of-book quotes, trades.
+- Market data (live): order book deltas (Yes orders = bids, No orders @ q = Yes asks @ 1-q),
+  top-of-book quotes, trades, and instrument status via the `market_lifecycle_v2` channel.
+- Market data (historical/request): instrument(s), order book snapshot
+  (`GET /markets/{ticker}/orderbook`), trade ticks (`GET /markets/trades`), and bars/candlesticks
+  (`GET /series/{series}/markets/{ticker}/candlesticks`, intervals 1/60/1440 min).
+- Not applicable on Kalshi (handled as explicit "unsupported"): historical quotes, streamed bars,
+  funding/index/mark prices, option greeks, L3/depth.
 - Execution: submit limit/market orders (V2 endpoint, `side` = bid/ask, price in dollars),
   batch submit (`_submit_order_list`), cancel, batch cancel, cancel-all, amend/modify, and
   order/fill/position status reports.
