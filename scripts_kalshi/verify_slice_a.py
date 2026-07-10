@@ -11,6 +11,7 @@ os.chdir(tempfile.gettempdir())
 from nautilus_trader.adapters.kalshi.common.credentials import get_kalshi_api_key_id
 from nautilus_trader.adapters.kalshi.common.credentials import get_kalshi_private_key_pem
 from nautilus_trader.adapters.kalshi.common.symbol import get_kalshi_instrument_id
+from nautilus_trader.adapters.kalshi.common.symbol import parse_kalshi_market
 from nautilus_trader.adapters.kalshi.config import KalshiDataClientConfig
 from nautilus_trader.adapters.kalshi.data import KalshiDataClient
 from nautilus_trader.adapters.kalshi.http.client import KalshiHttpClient
@@ -39,7 +40,8 @@ async def main() -> None:
     provider = KalshiInstrumentProvider(http_client=http, clock=clock, config=KalshiInstrumentProviderConfig(load_status="open"))
     page = await http.get("/markets", params={"limit": 500, "status": "open"})
     busiest = pick_busiest(page["markets"])
-    target = os.environ.get("VERIFY_TICKER") or busiest[0]["ticker"]
+    selected = os.environ.get("VERIFY_MARKET") or os.environ.get("VERIFY_TICKER")
+    target = parse_kalshi_market(selected).ticker if selected else busiest[0]["ticker"]
     await provider.load_async(get_kalshi_instrument_id(target))
     instrument = provider.find(get_kalshi_instrument_id(target))
     assert isinstance(instrument, BinaryOption)
@@ -111,7 +113,7 @@ async def main() -> None:
     if raw_count["n"] == 0:
         print("    note: no websocket traffic this run (demo can be slow/flaky); raise VERIFY_SECS and retry")
     elif best_bid is None and best_ask is None:
-        print("    note: this market's book is empty/one-sided; try VERIFY_TICKER on a busier market")
+        print("    note: this market's book is empty/one-sided; try VERIFY_MARKET on a busier market")
 
     ok = captured["book"] >= 1 and (best_bid is not None or best_ask is not None)
     print("\nSLICE A OK - instrument loaded, WS connected, book parsed and applied" if ok else "\nSLICE A CHECK FAILED - no book levels parsed (no data received from venue)")

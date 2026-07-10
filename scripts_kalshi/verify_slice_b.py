@@ -64,18 +64,12 @@ async def main() -> None:
         print("\nSLICE B PARTIAL - read-only paths OK, but the order was not accepted (see the rejection reason above)")
 
 async def _place_order(client, cache, clock) -> bool:
-    from nautilus_trader.adapters.kalshi.common.symbol import get_kalshi_instrument_id
     from nautilus_trader.test_kit.stubs.component import TestComponentStubs
     from nautilus_trader.test_kit.stubs.commands import TestCommandStubs
-    from nautilus_trader.model.objects import Price, Quantity
 
-    ticker = os.environ.get("VERIFY_TICKER", "KXMENWORLDCUP-26-FR")
-    side = os.environ.get("VERIFY_SIDE", "yes").lower()
+    market = os.environ.get("VERIFY_MARKET", "KXMENWORLDCUP-26-FR_yes.KALSHI")
     cents = int(os.environ.get("VERIFY_AMOUNT", "1"))
     count = int(os.environ.get("VERIFY_COUNT", "1"))
-    await client._instrument_provider.load_async(get_kalshi_instrument_id(ticker))
-    instrument = client._instrument_provider.find(get_kalshi_instrument_id(ticker))
-    cache.add_instrument(instrument)
 
     captured = {"order_id": None, "error": None}
     original_post = client._http_client.post
@@ -92,16 +86,16 @@ async def _place_order(client, cache, clock) -> bool:
 
     client._http_client.post = post_tap
 
-    if side == "yes":
-        order_side = OrderSide.BUY
-        yes_price = cents / 100.0
-    else:
-        order_side = OrderSide.SELL
-        yes_price = 1.0 - cents / 100.0
-
-    print(f"\n[6] Placing {count} contract(s) {side.upper()} @ {cents}c (YES leg {order_side.name} @ {yes_price:.2f}, ~${count * cents / 100.0:.2f}) on {ticker} ...")
-    factory = TestComponentStubs.order_factory()
-    order = factory.limit(instrument_id=instrument.id, order_side=order_side, quantity=Quantity.from_int(count), price=Price(yes_price, 2), time_in_force=TimeInForce.GTC)
+    print(f"\n[6] Placing from market string {market!r} @ {cents}c x{count} ...")
+    order = await client.build_limit_order(
+        market,
+        price=cents / 100.0,
+        quantity=count,
+        order_factory=TestComponentStubs.order_factory(),
+        time_in_force=TimeInForce.GTC,
+    )
+    ticker = order.instrument_id.symbol.value
+    print(f"    resolved: {ticker} YES leg {order.side.name} @ {order.price} x{order.quantity} (~${count * cents / 100.0:.2f})")
     cache.add_order(order, None)
     await client._submit_order(TestCommandStubs.submit_order_command(order))
     await asyncio.sleep(1)

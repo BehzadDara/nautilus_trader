@@ -1,17 +1,30 @@
-Sample Env set: $env:VERIFY_TICKER="KXMENWORLDCUP-26-FR"
-Sample Env remove: Remove-Item Env:VERIFY_TICKER
+Sample Env set:    $env:VERIFY_MARKET="KXMENWORLDCUP-26-FR_no.KALSHI"
+Sample Env remove: Remove-Item Env:VERIFY_MARKET
 
-Slice A (data):       
+VERIFY_MARKET format is TICKER_side.KALSHI  (side joined with _ , venue with .)
+
+VERIFY_MARKET accepted forms (both scripts):
+  KXMENWORLDCUP-26-FR_yes.KALSHI   YES
+  KXMENWORLDCUP-26-FR_no.KALSHI    NO
+  KXMENWORLDCUP-26-FR_no           venue optional
+  KXMENWORLDCUP-26-FR              no side given -> YES
+  KXTRUMPVH-26JUL17-T40.8_no.KALSHI   tickers may contain dots
+  https://demo.kalshi.co/markets/kxmenworldcup/mens-world-cup-winner/kxmenworldcup-26?op_market_ticker=KXMENWORLDCUP-26-FR&op_order_side=no
+
+Slice A (data):
   python .\verify_slice_a.py
-  VERIFY_TICKER  (default: busiest market)
+  VERIFY_MARKET  (default: busiest market)
   VERIFY_SECS    (default: 20)
+  VERIFY_RAW     (default: unset ; set to any value to print raw websocket messages)
 
 Slice B (execution):
   python .\verify_slice_b.py
-  VERIFY_TICKER  (default: KXMENWORLDCUP-26-FR)
-  VERIFY_SIDE    (default: yes ; accepts yes/no)
+  VERIFY_MARKET  (default: KXMENWORLDCUP-26-FR_yes.KALSHI)
   VERIFY_AMOUNT  (default: 1 ; limit price in cents, 1-99)
   VERIFY_COUNT   (default: 1 ; number of contracts ; total cost = AMOUNT/100 * COUNT)
+
+  Slice B opens a position and does not cancel it. To clear resting orders:
+  python .\cancel_open_orders.py
 
 Unit tests (no network):
   .\run_tests.ps1

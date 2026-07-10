@@ -66,6 +66,39 @@ node.add_exec_client_factory("KALSHI", KalshiLiveExecClientFactory)
 A Kalshi market is the Yes contract. Nautilus `BUY` = `bid` (buy Yes); `SELL` = `ask`
 (sell Yes, equivalent to buying No). Prices are Yes-leg dollars.
 
+Yes and No are the same instrument, not two: buying 1 Yes and 1 No leaves you flat. The
+outcome is therefore carried as an `OrderSide`, never in the `InstrumentId`.
+
+## Market strings
+
+`parse_kalshi_market` takes a single string and returns a `KalshiMarket` (`instrument_id`
+plus optional `side`). The format is `TICKER_side.KALSHI`: the side joins with `_` because
+roughly half of all Kalshi tickers contain a `.` (e.g. `KXTRUMPVH-26JUL17-T40.8`), and the
+venue joins with `.` so the result is a valid `InstrumentId` string.
+
+| Input | Ticker | Side |
+|---|---|---|
+| `KXMENWORLDCUP-26-FR_yes.KALSHI` | `KXMENWORLDCUP-26-FR` | `BUY` |
+| `KXMENWORLDCUP-26-FR_no` | `KXMENWORLDCUP-26-FR` | `SELL` |
+| `KXMENWORLDCUP-26-FR` | `KXMENWORLDCUP-26-FR` | `default_side` |
+| `https://demo.kalshi.co/markets/...?op_market_ticker=...&op_order_side=no` | from query | `SELL` |
+
+The execution client consumes these directly, so callers never invert prices themselves:
+
+```python
+order = await exec_client.build_limit_order(
+    "KXMENWORLDCUP-26-FR_no.KALSHI",  # or a KalshiMarket, or a pasted URL
+    price=0.40,                       # price of the named outcome
+    quantity=10,
+    order_factory=factory,
+)
+# -> OrderSide.SELL, Yes-leg price 0.60
+```
+
+`build_limit_order` maps the outcome to a side, converts the price to the Yes leg for `no`,
+and loads the instrument if it is not cached. `resolve_instrument` performs the lookup alone.
+Kalshi itself never sees the market string: the payload carries `ticker` and `side: bid|ask`.
+
 ## Development
 
 The installed wheel and the source tree are two separate copies. Develop in the source
