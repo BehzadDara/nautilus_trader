@@ -7,8 +7,11 @@ from nautilus_trader.adapters.kalshi.common.enums import kalshi_side_from_order_
 from nautilus_trader.adapters.kalshi.common.enums import kalshi_time_in_force
 from nautilus_trader.adapters.kalshi.common.enums import order_side_from_kalshi_side
 from nautilus_trader.adapters.kalshi.common.enums import order_status_from_kalshi
+from nautilus_trader.adapters.kalshi.common.symbol import KalshiMarket
 from nautilus_trader.adapters.kalshi.common.symbol import get_kalshi_instrument_id
 from nautilus_trader.adapters.kalshi.common.symbol import get_kalshi_ticker
+from nautilus_trader.adapters.kalshi.common.symbol import parse_kalshi_market
+from nautilus_trader.adapters.kalshi.common.symbol import yes_price_from_outcome_price
 from nautilus_trader.adapters.kalshi.config import KalshiExecClientConfig
 from nautilus_trader.adapters.kalshi.http.errors import KalshiHttpError
 from nautilus_trader.adapters.kalshi.providers import KalshiInstrumentProvider
@@ -40,6 +43,7 @@ from nautilus_trader.model.identifiers import ClientId
 from nautilus_trader.model.identifiers import ClientOrderId
 from nautilus_trader.model.identifiers import TradeId
 from nautilus_trader.model.identifiers import VenueOrderId
+from nautilus_trader.model.instruments import BinaryOption
 from nautilus_trader.model.objects import AccountBalance
 from nautilus_trader.model.objects import Money
 from nautilus_trader.model.objects import Price
@@ -73,6 +77,28 @@ class KalshiExecutionClient(LiveExecutionClient):
         if order.order_type == OrderType.LIMIT:
             payload['price'] = f'{float(order.price):.4f}'
         return payload
+
+    async def resolve_instrument(self, market: str | KalshiMarket) -> BinaryOption:
+        parsed = parse_kalshi_market(market) if isinstance(market, str) else market
+        instrument = self._cache.instrument(parsed.instrument_id)
+        if instrument is None:
+            instrument = self._instrument_provider.find(parsed.instrument_id)
+        if instrument is None:
+            await self._instrument_provider.load_async(parsed.instrument_id)
+            instrument = self._instrument_provider.find(parsed.instrument_id)
+        if instrument is None:
+            raise ValueError(f'unknown kalshi market: {parsed.instrument_id}')
+        if self._cache.instrument(parsed.instrument_id) is None:
+            self._cache.add_instrument(instrument)
+        return instrument
+
+    async def build_limit_order(self, market: str | KalshiMarket, price: Decimal | float | str, quantity: Decimal | float | str, order_factory: Any, time_in_force: TimeInForce=TimeInForce.GTC, default_side: OrderSide=OrderSide.BUY) -> Order:
+        parsed = parse_kalshi_market(market, default_side=default_side) if isinstance(market, str) else market
+        if parsed.side is None:
+            raise ValueError(f'no side in kalshi market: {market}')
+        instrument = await self.resolve_instrument(parsed)
+        yes_price = yes_price_from_outcome_price(Decimal(str(price)), parsed.side)
+        return order_factory.limit(instrument_id=instrument.id, order_side=parsed.side, quantity=Quantity(Decimal(str(quantity)), instrument.size_precision), price=Price(yes_price, instrument.price_precision), time_in_force=time_in_force)
 
     def _resolve_venue_order_id(self, instrument_id: Any, client_order_id: ClientOrderId, venue_order_id: VenueOrderId | None) -> VenueOrderId | None:
         if venue_order_id is not None:
